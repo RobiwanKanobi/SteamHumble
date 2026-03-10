@@ -196,8 +196,10 @@ textarea { width: 100%; resize: vertical; font-family: inherit; margin-bottom: 0
 .badge-new { background: var(--red); }
 .badge-unknown { background: var(--text-muted); }
 
-.game-name { flex: 1; }
+.game-name { flex: 1; color: var(--text); text-decoration: none; }
+.game-name:hover { color: var(--accent); }
 .game-name.owned { color: var(--text-muted); text-decoration: line-through; }
+.game-name.owned:hover { color: var(--accent); }
 .game-tag {
   font-size: 0.7rem;
   padding: 0.1rem 0.4rem;

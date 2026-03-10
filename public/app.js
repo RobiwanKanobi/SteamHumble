@@ -131,6 +131,11 @@ function renderBundles() {
   }).join('');
 }
 
+function steamUrl(game) {
+  if (game.steamAppId) return `https://store.steampowered.com/app/${game.steamAppId}`;
+  return `https://store.steampowered.com/search/?term=${encodeURIComponent(game.name)}`;
+}
+
 function gameItemHtml(game, compared) {
   const badgeClass = !compared ? 'badge-unknown' : game.owned ? 'badge-owned' : 'badge-new';
   const nameClass = game.owned ? 'owned' : '';
@@ -142,7 +147,7 @@ function gameItemHtml(game, compared) {
   return `
     <li class="game-item">
       <span class="game-badge ${badgeClass}"></span>
-      <span class="game-name ${nameClass}">${esc(game.name)}</span>
+      <a href="${steamUrl(game)}" target="_blank" class="game-name ${nameClass}">${esc(game.name)}</a>
       ${tag}
     </li>`;
 }
