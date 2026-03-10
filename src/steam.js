@@ -14,7 +14,12 @@ async function resolveVanityUrl(vanityName) {
   if (!res.ok) throw new Error(`Steam API error: ${res.status}`);
   const data = await res.json();
   if (data.response.success === 1) return data.response.steamid;
-  throw new Error(`Could not resolve Steam vanity URL "${vanityName}"`);
+  throw new Error(
+    `"${vanityName}" is not a Steam custom URL. ` +
+    'Your display name and custom URL are different things — ' +
+    'paste your full profile URL from a browser (e.g. steamcommunity.com/profiles/7656…) ' +
+    'or find your SteamID64 at steamid.io'
+  );
 }
 
 async function resolveProfileUrl(input) {
