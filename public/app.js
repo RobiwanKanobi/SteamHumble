@@ -446,29 +446,145 @@ async function loadBundles(refresh = false) {
   }
 }
 
+/* ---------- Smart input detection ---------- */
+
+function detectInputType(val) {
+  const trimmed = val.trim();
+  if (!trimmed) return null;
+  if (/^\d{17}$/.test(trimmed)) return { type: 'steamid64', label: 'SteamID64 detected', icon: '✓' };
+  if (/steamcommunity\.com\/profiles\/\d{17}/.test(trimmed)) return { type: 'profile_url', label: 'Steam profile URL detected', icon: '✓' };
+  if (/steamcommunity\.com\/id\/[^/]+/.test(trimmed)) return { type: 'vanity_url', label: 'Steam custom URL detected', icon: '✓' };
+  if (trimmed.includes('steamcommunity.com')) return { type: 'steam_url', label: 'Steam URL detected', icon: '✓' };
+  if (trimmed.includes(' ') || trimmed.length > 40) return { type: 'probably_name', label: 'This looks like a display name — paste your profile URL instead', icon: '⚠' };
+  return { type: 'vanity_guess', label: 'Will try as custom URL', icon: '…' };
+}
+
+function updateInputDetect() {
+  const el = $('#input-detect');
+  const val = $('#steam-input').value;
+  const detect = detectInputType(val);
+  if (!detect) { el.style.display = 'none'; return; }
+  const cls = (detect.icon === '✓') ? 'detect-ok' : (detect.icon === '⚠') ? 'detect-warn' : 'detect-neutral';
+  el.innerHTML = `<span class="${cls}">${detect.icon} ${detect.label}</span>`;
+  el.style.display = '';
+}
+
+/* ---------- Profile connection ---------- */
+
+function showProfileCard(player, stats) {
+  const card = $('#profile-card');
+  $('#profile-avatar').src = player.avatar;
+  $('#profile-name').textContent = player.name;
+  $('#profile-stats').textContent = stats;
+  card.style.display = '';
+  $('#steam-input').parentElement.style.display = 'none';
+  $('.profile-actions').style.display = 'none';
+  $('#input-detect').style.display = 'none';
+}
+
+function disconnectProfile() {
+  $('#profile-card').style.display = 'none';
+  $('#steam-input').parentElement.style.display = '';
+  $('.profile-actions').style.display = '';
+  $('#profile-status').textContent = '';
+  appState.library = null;
+  appState.wishlist = null;
+  appState.steamId = null;
+  renderBundles();
+}
+
+function showPrivacyGuide(reason, player) {
+  const guide = $('#privacy-guide');
+  const name = player?.name || 'your profile';
+  const settingsUrl = 'https://steamcommunity.com/my/edit/settings';
+
+  if (reason === 'profile_private') {
+    guide.innerHTML = `
+      <div class="privacy-header">🔒 ${esc(name)}'s profile is private</div>
+      <p>We found your account but can't see your games. Follow these steps:</p>
+      <ol class="privacy-steps">
+        <li>Open <a href="${settingsUrl}" target="_blank">Steam Privacy Settings</a> (opens Steam)</li>
+        <li>Set <strong>My profile</strong> → <strong>Public</strong></li>
+        <li>Set <strong>Game details</strong> → <strong>Public</strong></li>
+        <li>Click <strong>Save</strong></li>
+        <li>Come back here and click <button class="btn-link btn-retry" type="button">Retry</button></li>
+      </ol>
+      <div class="privacy-note">Changes take effect immediately — no need to restart Steam.</div>`;
+  } else if (reason === 'games_private') {
+    guide.innerHTML = `
+      <div class="privacy-header">🔒 ${esc(name)}'s game details are hidden</div>
+      <p>Your profile is public but your game list is hidden. Quick fix:</p>
+      <ol class="privacy-steps">
+        <li>Open <a href="${settingsUrl}" target="_blank">Steam Privacy Settings</a></li>
+        <li>Set <strong>Game details</strong> → <strong>Public</strong></li>
+        <li>Click <strong>Save</strong>, then <button class="btn-link btn-retry" type="button">Retry</button></li>
+      </ol>`;
+  }
+
+  guide.style.display = '';
+  guide.querySelector('.btn-retry')?.addEventListener('click', () => {
+    guide.style.display = 'none';
+    compareLibrary();
+  });
+}
+
 async function compareLibrary() {
   const input = $('#steam-input').value.trim();
   const status = $('#profile-status');
   const btn = $('#compare-btn');
+  const privacyGuide = $('#privacy-guide');
+  privacyGuide.style.display = 'none';
+
   if (!input) { setStatus(status, 'Please enter a Steam profile.', 'error'); return; }
   if (!appState.hasSteamKey) { setStatus(status, 'Steam API key is not configured on the server.', 'error'); return; }
 
   btn.disabled = true;
-  setStatus(status, 'Fetching your Steam library & wishlist…', 'loading');
+  setStatus(status, 'Checking your Steam profile…', 'loading');
+
   try {
+    const check = await api(`/api/steam/check?profile=${encodeURIComponent(input)}`);
+
+    if (!check.resolved) {
+      setStatus(status, 'Could not find that Steam profile.', 'error');
+      btn.disabled = false;
+      return;
+    }
+
+    if (check.reason === 'profile_private' || check.reason === 'games_private') {
+      setStatus(status, '', '');
+      showPrivacyGuide(check.reason, check.player);
+      btn.disabled = false;
+      return;
+    }
+
+    setStatus(status, `Found ${esc(check.player?.name || 'profile')} — loading ${check.gameCount} games…`, 'loading');
+
     const data = await api(`/api/steam/library?profile=${encodeURIComponent(input)}`);
     appState.library = data;
     appState.wishlist = data.wishlist || [];
     appState.steamId = data.steamId;
-    const parts = [`✓ Found ${data.gameCount} games`];
+
+    localStorage.setItem('steam_profile', input);
+
+    const parts = [`${data.gameCount} games`];
     if (data.wishlistCount > 0) parts.push(`${data.wishlistCount} wishlisted`);
-    setStatus(status, parts.join(' · '), 'success');
+
+    if (check.player) {
+      showProfileCard(check.player, parts.join(' · '));
+    }
+    setStatus(status, `✓ ${parts.join(' · ')}`, 'success');
     renderBundles();
   } catch (err) {
     setStatus(status, err.message, 'error');
   } finally {
     btn.disabled = false;
   }
+}
+
+function tryDemo() {
+  $('#steam-input').value = '76561198006409530';
+  updateInputDetect();
+  compareLibrary();
 }
 
 async function addBundleUrl() {
@@ -512,8 +628,22 @@ async function init() {
 
   loadBundles();
 
+  const savedProfile = localStorage.getItem('steam_profile');
+  if (savedProfile) {
+    $('#steam-input').value = savedProfile;
+    updateInputDetect();
+  }
+
   $('#compare-btn').addEventListener('click', compareLibrary);
   $('#steam-input').addEventListener('keydown', e => { if (e.key === 'Enter') compareLibrary(); });
+  $('#steam-input').addEventListener('input', updateInputDetect);
+  $('#steam-input').addEventListener('paste', () => setTimeout(updateInputDetect, 0));
+  $('#demo-btn').addEventListener('click', tryDemo);
+  $('#help-toggle').addEventListener('click', () => {
+    const g = $('#help-guide');
+    g.style.display = g.style.display === 'none' ? '' : 'none';
+  });
+  $('#profile-disconnect').addEventListener('click', disconnectProfile);
   $('#refresh-btn').addEventListener('click', () => loadBundles(true));
   $('#add-bundle-btn').addEventListener('click', () => {
     const m = $('#add-bundle-modal');

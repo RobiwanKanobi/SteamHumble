@@ -27,17 +27,62 @@
         <input
           type="text"
           id="steam-input"
-          placeholder="Steam profile URL, vanity name, or SteamID64"
+          placeholder="Paste your Steam profile URL here"
           autocomplete="off"
         >
         <button id="compare-btn" class="btn-primary">Compare</button>
       </div>
-      <p class="hint">
-        Paste your full profile URL from a browser, e.g. <code>https://steamcommunity.com/id/yourname</code>
-        or <code>https://steamcommunity.com/profiles/7656…</code>
-        — <strong>not</strong> your display name. <a href="https://steamid.io" target="_blank" style="color:var(--accent)">Find your ID →</a>
-      </p>
+      <div id="input-detect" class="input-detect" style="display:none"></div>
+      <div class="profile-actions">
+        <button id="demo-btn" class="btn-link" type="button">Try with a demo profile</button>
+        <span class="dot-sep">·</span>
+        <button id="help-toggle" class="btn-link" type="button">How do I find my Steam ID?</button>
+      </div>
       <div id="profile-status" class="status"></div>
+
+      <!-- Connected profile card -->
+      <div id="profile-card" class="profile-card" style="display:none">
+        <img id="profile-avatar" class="profile-avatar" src="" alt="">
+        <div class="profile-info">
+          <div id="profile-name" class="profile-name"></div>
+          <div id="profile-stats" class="profile-stats"></div>
+        </div>
+        <button id="profile-disconnect" class="btn-link" type="button">Change</button>
+      </div>
+
+      <!-- Privacy fix guide -->
+      <div id="privacy-guide" class="privacy-guide" style="display:none"></div>
+
+      <!-- How to find Steam ID guide -->
+      <div id="help-guide" class="help-guide" style="display:none">
+        <h4>3 ways to find your Steam profile</h4>
+        <div class="help-method">
+          <div class="help-step-num">1</div>
+          <div>
+            <strong>Copy your profile URL</strong> (easiest)<br>
+            Open Steam → click your name (top right) → <em>View my profile</em> → copy the URL from your browser's address bar.
+            It will look like <code>https://steamcommunity.com/id/yourname</code> or <code>https://steamcommunity.com/profiles/7656…</code>
+          </div>
+        </div>
+        <div class="help-method">
+          <div class="help-step-num">2</div>
+          <div>
+            <strong>Use the Steam app</strong><br>
+            Open Steam → click your name → <em>Account details</em> → your SteamID64 is the long number in the URL.
+          </div>
+        </div>
+        <div class="help-method">
+          <div class="help-step-num">3</div>
+          <div>
+            <strong>Use steamid.io</strong><br>
+            Go to <a href="https://steamid.io" target="_blank">steamid.io</a>, search your Steam name, and copy the <em>steamID64</em> number.
+          </div>
+        </div>
+        <div class="help-note">
+          <strong>⚠️ Important:</strong> Your Steam display name (what friends see) is <em>not</em> the same as your profile URL.
+          Don't type your display name — paste the full URL or ID number.
+        </div>
+      </div>
     </section>
 
     <!-- Bundles Section -->

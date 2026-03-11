@@ -70,6 +70,49 @@ app.get('/api/steam/resolve', async (req, res) => {
   }
 });
 
+app.get('/api/steam/check', async (req, res) => {
+  try {
+    const { profile } = req.query;
+    if (!profile) return res.status(400).json({ error: 'Profile is required' });
+    const steamId = await steam.resolveProfileUrl(profile);
+    const summary = await steam.getPlayerSummary(steamId);
+    if (!summary) return res.json({ steamId, resolved: true, visible: false, reason: 'profile_not_found' });
+
+    if (summary.visibility !== 3) {
+      return res.json({
+        steamId,
+        resolved: true,
+        visible: false,
+        reason: 'profile_private',
+        player: summary,
+      });
+    }
+
+    const testGames = await steam.getOwnedGames(steamId).catch(() => null);
+    if (!testGames) {
+      return res.json({
+        steamId,
+        resolved: true,
+        visible: true,
+        gamesVisible: false,
+        reason: 'games_private',
+        player: summary,
+      });
+    }
+
+    return res.json({
+      steamId,
+      resolved: true,
+      visible: true,
+      gamesVisible: true,
+      gameCount: testGames.length,
+      player: summary,
+    });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 app.get('/api/steam/library', async (req, res) => {
   try {
     const { profile } = req.query;

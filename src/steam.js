@@ -76,4 +76,21 @@ async function getWishlist(steamId) {
   return (data.response?.items || []).map(i => i.appid);
 }
 
-module.exports = { resolveProfileUrl, getOwnedGames, getWishlist, searchSteamApp, getAppDetails };
+async function getPlayerSummary(steamId) {
+  const key = getApiKey();
+  const url = `${STEAM_API_BASE}/ISteamUser/GetPlayerSummaries/v2/?key=${key}&steamids=${steamId}`;
+  const res = await fetch(url);
+  if (!res.ok) return null;
+  const data = await res.json();
+  const player = data.response?.players?.[0];
+  if (!player) return null;
+  return {
+    steamId: player.steamid,
+    name: player.personaname,
+    avatar: player.avatarmedium,
+    profileUrl: player.profileurl,
+    visibility: player.communityvisibilitystate,
+  };
+}
+
+module.exports = { resolveProfileUrl, getOwnedGames, getWishlist, getPlayerSummary, searchSteamApp, getAppDetails };
