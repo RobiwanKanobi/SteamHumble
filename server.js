@@ -11,6 +11,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
 let bundleCache = { data: null, ts: 0 };
+let choiceCache = { data: null, ts: 0 };
 const CACHE_TTL = 15 * 60 * 1000;
 
 app.get('/api/config', (_req, res) => {
@@ -30,6 +31,20 @@ app.get('/api/bundles', async (_req, res) => {
     res.json({ bundles, cached: false });
   } catch (err) {
     console.error('Bundle fetch error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/choice', async (_req, res) => {
+  try {
+    if (choiceCache.data && Date.now() - choiceCache.ts < CACHE_TTL) {
+      return res.json({ choice: choiceCache.data, cached: true });
+    }
+    const choice = await humble.fetchHumbleChoice();
+    choiceCache = { data: choice, ts: Date.now() };
+    res.json({ choice, cached: false });
+  } catch (err) {
+    console.error('Choice fetch error:', err);
     res.status(500).json({ error: err.message });
   }
 });

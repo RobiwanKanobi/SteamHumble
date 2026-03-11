@@ -271,6 +271,104 @@ textarea { width: 100%; resize: vertical; font-family: inherit; margin-bottom: 0
 
 .empty-state { text-align: center; padding: 2rem; color: var(--text-muted); }
 
+/* ========== HUMBLE CHOICE ========== */
+
+.choice-card {
+  background: var(--surface);
+  border: 2px solid var(--orange);
+  border-radius: var(--radius);
+  margin-bottom: 2rem;
+  overflow: hidden;
+  box-shadow: 0 0 20px rgba(240, 136, 62, 0.1);
+}
+.choice-hero {
+  position: relative;
+  width: 100%;
+  max-height: 240px;
+  overflow: hidden;
+  background: var(--bg);
+}
+.choice-hero img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.choice-hero-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 0.75rem 1rem;
+  background: linear-gradient(180deg, rgba(0,0,0,0.7) 0%, transparent 100%);
+}
+.choice-badge {
+  display: inline-block;
+  padding: 0.3rem 0.7rem;
+  background: var(--orange);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  border-radius: 4px;
+}
+.choice-header {
+  padding: 1rem 1.25rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-hover);
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.choice-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+.choice-subtitle {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-top: 0.15rem;
+}
+.choice-verdict {
+  padding: 0.6rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.choice-cpg {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--green);
+  margin-left: auto;
+}
+.choice-games {
+  padding: 0.75rem 1.25rem;
+}
+.choice-grid {
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+.choice-bonuses {
+  padding: 0.5rem 1.25rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
+}
+.choice-cta {
+  background: var(--surface-hover);
+  border-top: 1px solid var(--border);
+}
+.btn-cta-choice {
+  background: var(--orange);
+  font-size: 1rem;
+  padding: 0.7rem 2rem;
+}
+.btn-cta-choice:hover {
+  background: #f59b4f;
+}
+
 /* ========== BUNDLE CARDS ========== */
 
 .bundle-card {

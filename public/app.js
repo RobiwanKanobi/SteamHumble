@@ -424,7 +424,112 @@ function hidePreview() {
 function setView(mode) {
   appState.viewMode = mode;
   $$('.view-btn').forEach(b => b.classList.toggle('view-btn-active', b.dataset.view === mode));
+  renderChoice();
   renderBundles();
+}
+
+/* ---------- Humble Choice ---------- */
+
+let choiceData = null;
+
+function renderChoice() {
+  const section = $('#choice-section');
+  const container = $('#choice-container');
+  if (!choiceData) { section.style.display = 'none'; return; }
+
+  section.style.display = '';
+  const compared = !!appState.library;
+  const games = choiceData.games.map(classifyGame);
+  const ownedCount = games.filter(g => g.owned === true).length;
+  const newCount = games.filter(g => g.owned === false).length;
+  const wishlistedCount = games.filter(g => g.wishlisted && !g.owned).length;
+  const total = games.length;
+
+  const summaryParts = [`${total} games`];
+  if (compared) {
+    summaryParts.push(`${ownedCount} owned`);
+    summaryParts.push(`${newCount} new`);
+    if (wishlistedCount > 0) summaryParts.push(`${wishlistedCount} wishlisted`);
+  }
+
+  let verdictHtml = '';
+  if (compared && total > 0) {
+    const pctNew = Math.round((newCount / total) * 100);
+    let verdict = '', verdictClass = '';
+    if (newCount === 0) { verdict = 'You own everything — skip this month'; verdictClass = 'verdict-skip'; }
+    else if (pctNew >= 70) { verdict = 'Great month — mostly new games!'; verdictClass = 'verdict-great'; }
+    else if (pctNew >= 40) { verdict = 'Decent month — several new games'; verdictClass = 'verdict-good'; }
+    else { verdict = 'Weak month for you — you own most of these'; verdictClass = 'verdict-low'; }
+    if (wishlistedCount > 0 && newCount > 0) {
+      verdict = `⭐ ${wishlistedCount} wishlisted! ${verdict}`;
+      verdictClass = 'verdict-great';
+    }
+    const costPerNew = newCount > 0 ? (choiceData.price / newCount).toFixed(2) : null;
+    verdictHtml = `
+      <div class="choice-verdict">
+        <div class="value-meter"><div class="value-meter-fill" style="width:${pctNew}%"></div></div>
+        <span class="value-verdict ${verdictClass}">${verdict}</span>
+        ${costPerNew ? `<span class="choice-cpg">$${costPerNew}/new game</span>` : ''}
+      </div>`;
+  }
+
+  const wishlistCallout = (wishlistedCount > 0)
+    ? `<div class="wishlist-callout">
+         <div class="callout-header">⭐ ${wishlistedCount} game${wishlistedCount > 1 ? 's' : ''} from your wishlist!</div>
+         <div class="callout-games">${games.filter(g => g.wishlisted && !g.owned).map(g => {
+           const thumb = g.steamAppId ? steamCapsule(g.steamAppId, 'small') : '';
+           return `<a href="${steamUrl(g)}" target="_blank" class="callout-game">${thumb ? `<img src="${thumb}" class="callout-thumb">` : ''}<span>${esc(g.name)}</span></a>`;
+         }).join('')}</div>
+       </div>`
+    : '';
+
+  const gamesHtml = appState.viewMode === 'grid'
+    ? `<div class="game-grid choice-grid">${games.map(g => gameCardHtml(g, compared)).join('')}</div>`
+    : `<ul class="game-list">${games.map(g => gameListHtml(g, compared)).join('')}</ul>`;
+
+  const bonusHtml = choiceData.bonuses?.length
+    ? `<div class="choice-bonuses">Also includes: ${choiceData.bonuses.map(b => esc(b)).join(', ')}</div>`
+    : '';
+
+  const ctaUrl = bundleLink(choiceData.url);
+  const ctaText = compared && newCount > 0
+    ? `Get ${newCount} new games for $${choiceData.price}`
+    : `Get ${total} games for $${choiceData.price}/month`;
+
+  container.innerHTML = `
+    <div class="choice-card">
+      ${choiceData.heroImage ? `<div class="choice-hero"><img src="${choiceData.heroImage}" alt="${esc(choiceData.name)}" loading="lazy"><div class="choice-hero-overlay"><div class="choice-badge">HUMBLE CHOICE</div></div></div>` : ''}
+      <div class="choice-header">
+        <div>
+          <h2 class="choice-title">${esc(choiceData.name)}</h2>
+          <div class="choice-subtitle">$${choiceData.price}/month · All ${total} games included</div>
+        </div>
+        <div class="bundle-summary">${summaryParts.map((s, i) => {
+          const cls = i === 0 ? 'stat-total' : s.includes('owned') ? 'stat-owned' : s.includes('new') ? 'stat-new' : 'stat-wishlist';
+          return `<span class="stat ${cls}">${s}</span>`;
+        }).join('')}</div>
+      </div>
+      ${verdictHtml}
+      ${wishlistCallout}
+      <div class="choice-games">${gamesHtml}</div>
+      ${bonusHtml}
+      <div class="bundle-cta choice-cta">
+        <a href="${ctaUrl}" target="_blank" class="btn-cta btn-cta-choice">${ctaText}</a>
+        <span class="cta-savings">Best value subscription — cancel anytime</span>
+      </div>
+    </div>`;
+
+  setupHoverPreviews();
+}
+
+async function loadChoice() {
+  try {
+    const data = await api('/api/choice');
+    choiceData = data.choice;
+    renderChoice();
+  } catch (err) {
+    console.error('Failed to load Humble Choice:', err);
+  }
 }
 
 /* ---------- Data loading ---------- */
@@ -573,6 +678,7 @@ async function compareLibrary() {
       showProfileCard(check.player, parts.join(' · '));
     }
     setStatus(status, `✓ ${parts.join(' · ')}`, 'success');
+    renderChoice();
     renderBundles();
   } catch (err) {
     setStatus(status, err.message, 'error');
@@ -626,6 +732,7 @@ async function init() {
     if (!config.hasSteamKey) $('#api-warning').style.display = '';
   } catch (_e) {}
 
+  loadChoice();
   loadBundles();
 
   const savedProfile = localStorage.getItem('steam_profile');

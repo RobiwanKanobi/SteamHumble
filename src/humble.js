@@ -175,4 +175,51 @@ async function fetchBundles() {
   }
 }
 
-module.exports = { fetchBundles, fetchBundlesList, fetchBundleDetails };
+async function fetchHumbleChoice() {
+  try {
+    const html = await fetchPage(`${HUMBLE_BASE}/membership`);
+    const $ = cheerio.load(html);
+
+    const heroImage = $('img[alt="Featured game"]').attr('src') || null;
+    const price = 14.99;
+
+    const bonusKeywords = ['playtest', 'ign plus', 'bonus', 'free trial'];
+    const games = [];
+    const seen = new Set();
+
+    $('.discover-game, .js-discover-game-slide').each((_i, el) => {
+      const name = $(el).text().trim().split('\n')[0].trim();
+      const alt = $(el).find('img').first().attr('alt') || '';
+      const displayName = name || alt;
+      if (!displayName || seen.has(displayName)) return;
+      seen.add(displayName);
+      const isBonus = bonusKeywords.some(kw => displayName.toLowerCase().includes(kw));
+      games.push({ name: displayName, isBonus });
+    });
+
+    const actualGames = games.filter(g => !g.isBonus);
+    const bonuses = games.filter(g => g.isBonus);
+
+    for (const game of actualGames) {
+      game.steamAppId = await resolveSteamAppId(game.name);
+    }
+
+    const now = new Date();
+    const monthName = now.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+
+    return {
+      name: `Humble Choice — ${monthName}`,
+      url: `${HUMBLE_BASE}/membership`,
+      heroImage,
+      price,
+      games: actualGames,
+      bonuses: bonuses.map(b => b.name),
+      monthName,
+    };
+  } catch (err) {
+    console.error('Failed to fetch Humble Choice:', err.message);
+    return null;
+  }
+}
+
+module.exports = { fetchBundles, fetchBundlesList, fetchBundleDetails, fetchHumbleChoice };
