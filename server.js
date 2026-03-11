@@ -75,10 +75,14 @@ app.get('/api/steam/library', async (req, res) => {
     const { profile } = req.query;
     if (!profile) return res.status(400).json({ error: 'Profile URL or ID is required' });
     const steamId = await steam.resolveProfileUrl(profile);
-    const games = await steam.getOwnedGames(steamId);
+    const [games, wishlist] = await Promise.all([
+      steam.getOwnedGames(steamId),
+      steam.getWishlist(steamId).catch(() => []),
+    ]);
     res.json({
       steamId,
       gameCount: games.length,
+      wishlistCount: wishlist.length,
       games: games.map(g => ({
         appId: g.appid,
         name: g.name,
@@ -87,6 +91,7 @@ app.get('/api/steam/library', async (req, res) => {
           ? `https://media.steampowered.com/steamcommunity/public/images/apps/${g.appid}/${g.img_icon_url}.jpg`
           : null,
       })),
+      wishlist,
     });
   } catch (err) {
     console.error('Steam library error:', err);

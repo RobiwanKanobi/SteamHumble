@@ -6,6 +6,7 @@ let appState = {
   partnerId: '',
   bundles: [],
   library: null,
+  wishlist: null,
   steamId: null,
 };
 
@@ -26,11 +27,44 @@ function setStatus(el, msg, type = '') {
 }
 
 function bundleLink(url) {
+  if (!url || url === '#') return '#';
   if (appState.partnerId) {
     const sep = url.includes('?') ? '&' : '?';
     return `${url}${sep}partner=${appState.partnerId}`;
   }
   return url;
+}
+
+function extractTierPrice(tierName) {
+  const m = tierName.match(/\$(\d+(?:\.\d+)?)/);
+  return m ? parseFloat(m[1]) : null;
+}
+
+function classifyGame(game) {
+  const ownedIds = appState.library ? new Set(appState.library.games.map(g => g.appId)) : null;
+  const ownedNames = appState.library ? new Map(appState.library.games.map(g => [g.name.toLowerCase(), g])) : null;
+  const wishlistIds = appState.wishlist ? new Set(appState.wishlist) : null;
+
+  let owned = null;
+  let wishlisted = false;
+
+  if (ownedIds) {
+    owned = false;
+    if (game.steamAppId && ownedIds.has(game.steamAppId)) owned = true;
+    else if (game.name && ownedNames.has(game.name.toLowerCase())) owned = true;
+    else if (game.name) {
+      const lower = game.name.toLowerCase();
+      for (const [oName] of ownedNames) {
+        if (oName.includes(lower) || lower.includes(oName)) { owned = true; break; }
+      }
+    }
+  }
+
+  if (wishlistIds && game.steamAppId) {
+    wishlisted = wishlistIds.has(game.steamAppId);
+  }
+
+  return { ...game, owned, wishlisted };
 }
 
 function renderBundles() {
@@ -44,89 +78,130 @@ function renderBundles() {
   }
 
   noBundles.style.display = 'none';
-  const ownedIds = appState.library
-    ? new Set(appState.library.games.map(g => g.appId))
-    : null;
-  const ownedNames = appState.library
-    ? new Map(appState.library.games.map(g => [g.name.toLowerCase(), g]))
-    : null;
+  const compared = !!appState.library;
 
   container.innerHTML = appState.bundles.map(bundle => {
     const allGamesRaw = bundle.tiers?.flatMap(t => t.games) || bundle.games || [];
     const uniqueMap = new Map();
     for (const g of allGamesRaw) uniqueMap.set(g.machineName || g.name, g);
-    const allGames = [...uniqueMap.values()];
-    const gamesWithOwnership = allGames.map(g => {
-      if (!ownedIds) return { ...g, owned: null };
-      if (g.steamAppId && ownedIds.has(g.steamAppId)) return { ...g, owned: true };
-      if (g.name && ownedNames.has(g.name.toLowerCase())) return { ...g, owned: true };
-      if (g.name) {
-        const lower = g.name.toLowerCase();
-        for (const [oName] of ownedNames) {
-          if (oName.includes(lower) || lower.includes(oName)) return { ...g, owned: true };
-        }
-      }
-      return { ...g, owned: false };
-    });
+    const allGames = [...uniqueMap.values()].map(classifyGame);
 
-    const ownedCount = gamesWithOwnership.filter(g => g.owned === true).length;
-    const newCount = gamesWithOwnership.filter(g => g.owned === false).length;
-    const total = gamesWithOwnership.length;
-    const compared = ownedIds !== null;
+    const ownedCount = allGames.filter(g => g.owned === true).length;
+    const newCount = allGames.filter(g => g.owned === false).length;
+    const wishlistedCount = allGames.filter(g => g.wishlisted && !g.owned).length;
+    const total = allGames.length;
 
     const seenInTier = new Set();
     const tiersHtml = (bundle.tiers && bundle.tiers.length > 0)
       ? [...bundle.tiers].reverse().map(tier => {
-          const tierGamesOwnership = tier.games
+          const tierPrice = extractTierPrice(tier.name);
+          const tierGames = tier.games
             .filter(g => {
               const key = g.machineName || g.name;
               if (seenInTier.has(key)) return false;
               seenInTier.add(key);
               return true;
             })
-            .map(g => {
-              const match = gamesWithOwnership.find(
-                gw => gw.name === g.name || (gw.machineName && gw.machineName === g.machineName)
-              );
-              return match || { ...g, owned: null };
-            });
-          if (tierGamesOwnership.length === 0) return '';
+            .map(g => allGames.find(ag => ag.name === g.name || (ag.machineName && ag.machineName === g.machineName)) || classifyGame(g));
+
+          if (tierGames.length === 0) return '';
+
+          const tierNew = tierGames.filter(g => g.owned === false).length;
+          const tierMsrp = tierGames.reduce((s, g) => s + (g.msrp || 0), 0);
+          const costPerNew = (compared && tierPrice && tierNew > 0) ? (tierPrice / tierNew) : null;
+
+          let valueHtml = '';
+          if (compared && tierPrice) {
+            const parts = [];
+            if (tierNew > 0) parts.push(`<span class="tier-value-item">$${costPerNew.toFixed(2)}/new game</span>`);
+            if (tierMsrp > 0) parts.push(`<span class="tier-value-item">${Math.round((1 - tierPrice / tierMsrp) * 100)}% off MSRP</span>`);
+            if (tierNew === 0) parts.push(`<span class="tier-value-item tier-value-skip">You own all ${tierGames.length} games</span>`);
+            if (parts.length) valueHtml = `<div class="tier-value">${parts.join(' · ')}</div>`;
+          } else if (tierPrice && tierMsrp > 0) {
+            valueHtml = `<div class="tier-value"><span class="tier-value-item">Worth $${tierMsrp.toFixed(0)} · ${Math.round((1 - tierPrice / tierMsrp) * 100)}% off</span></div>`;
+          }
+
           return `
             <div class="tier">
-              <div class="tier-name">${esc(tier.name)}</div>
+              <div class="tier-header">
+                <div class="tier-name">${esc(tier.name)}</div>
+                ${valueHtml}
+              </div>
               <ul class="game-list">
-                ${tierGamesOwnership.map(g => gameItemHtml(g, compared)).join('')}
+                ${tierGames.map(g => gameItemHtml(g, compared)).join('')}
               </ul>
             </div>`;
         }).reverse().filter(Boolean).join('')
-      : (gamesWithOwnership.length > 0
-          ? `<div class="tier">
-               <ul class="game-list">
-                 ${gamesWithOwnership.map(g => gameItemHtml(g, compared)).join('')}
-               </ul>
-             </div>`
-          : `<div class="tier"><p class="no-compare-hint">No game data extracted for this bundle. Try adding games manually.</p></div>`);
+      : (allGames.length > 0
+          ? `<div class="tier"><ul class="game-list">${allGames.map(g => gameItemHtml(g, compared)).join('')}</ul></div>`
+          : `<div class="tier"><p class="no-compare-hint">No game data extracted. Try adding games manually.</p></div>`);
 
-    const summaryHtml = compared && total > 0
-      ? `<div class="bundle-summary">
-           <span class="stat stat-total">${total} games</span>
-           <span class="stat stat-owned">${ownedCount} owned</span>
-           <span class="stat stat-new">${newCount} new</span>
+    const summaryParts = [];
+    if (total > 0) summaryParts.push(`<span class="stat stat-total">${total} games</span>`);
+    if (compared) {
+      summaryParts.push(`<span class="stat stat-owned">${ownedCount} owned</span>`);
+      summaryParts.push(`<span class="stat stat-new">${newCount} new</span>`);
+      if (wishlistedCount > 0) summaryParts.push(`<span class="stat stat-wishlist">${wishlistedCount} wishlisted</span>`);
+    }
+    const summaryHtml = summaryParts.length > 0
+      ? `<div class="bundle-summary">${summaryParts.join('')}</div>`
+      : '';
+
+    const topTierPrice = bundle.tiers?.reduce((max, t) => {
+      const p = extractTierPrice(t.name);
+      return (p && p > max) ? p : max;
+    }, 0) || null;
+
+    const totalMsrp = allGames.reduce((s, g) => s + (g.msrp || 0), 0);
+
+    let valueBarHtml = '';
+    if (compared && total > 0) {
+      const pctNew = Math.round((newCount / total) * 100);
+      const hasWishlisted = wishlistedCount > 0;
+      let verdict = '';
+      let verdictClass = '';
+      if (newCount === 0) { verdict = 'You own everything here'; verdictClass = 'verdict-skip'; }
+      else if (pctNew >= 70) { verdict = 'Great value — mostly new games!'; verdictClass = 'verdict-great'; }
+      else if (pctNew >= 40) { verdict = 'Good value — many new games'; verdictClass = 'verdict-good'; }
+      else { verdict = 'Low value — you own most of these'; verdictClass = 'verdict-low'; }
+
+      if (hasWishlisted && newCount > 0) {
+        verdict = `⭐ ${wishlistedCount} wishlisted game${wishlistedCount > 1 ? 's' : ''}! ${verdict}`;
+        verdictClass = 'verdict-great';
+      }
+
+      valueBarHtml = `
+        <div class="value-bar">
+          <div class="value-meter">
+            <div class="value-meter-fill" style="width:${pctNew}%"></div>
+          </div>
+          <div class="value-verdict ${verdictClass}">${verdict}</div>
+        </div>`;
+    }
+
+    const ctaUrl = bundleLink(bundle.url);
+    const ctaHtml = (bundle.url && bundle.url !== '#')
+      ? `<div class="bundle-cta">
+           <a href="${ctaUrl}" target="_blank" class="btn-cta">
+             ${compared && newCount > 0
+               ? `Get ${newCount} new game${newCount > 1 ? 's' : ''} ${topTierPrice ? 'from $' + topTierPrice : ''}`
+               : (totalMsrp > 0 && topTierPrice
+                 ? `Get ${total} games worth $${totalMsrp.toFixed(0)} ${topTierPrice ? 'from $' + topTierPrice : ''}`
+                 : 'View Bundle on Humble Bundle')}
+           </a>
+           ${totalMsrp > 0 && topTierPrice ? `<span class="cta-savings">Save ${Math.round((1 - topTierPrice / totalMsrp) * 100)}% vs buying separately</span>` : ''}
          </div>`
-      : (total > 0
-          ? `<div class="bundle-summary"><span class="stat stat-total">${total} games</span></div>`
-          : '');
+      : '';
 
     return `
-      <div class="bundle-card">
+      <div class="bundle-card${wishlistedCount > 0 ? ' bundle-wishlisted' : ''}">
         <div class="bundle-header">
           <h3>${esc(bundle.name)}</h3>
-          <div style="display:flex;align-items:center;gap:1rem">
-            ${summaryHtml}
-            <a href="${bundleLink(bundle.url)}" target="_blank">View on Humble →</a>
-          </div>
+          ${summaryHtml}
         </div>
+        ${valueBarHtml}
         ${tiersHtml}
+        ${ctaHtml}
       </div>`;
   }).join('');
 }
@@ -139,16 +214,19 @@ function steamUrl(game) {
 function gameItemHtml(game, compared) {
   const badgeClass = !compared ? 'badge-unknown' : game.owned ? 'badge-owned' : 'badge-new';
   const nameClass = game.owned ? 'owned' : '';
-  const tag = !compared
-    ? ''
-    : game.owned
-      ? '<span class="game-tag tag-owned">OWNED</span>'
-      : '<span class="game-tag tag-new">NEW</span>';
+  const tags = [];
+  if (game.wishlisted && !game.owned) tags.push('<span class="game-tag tag-wishlist">WISHLISTED</span>');
+  if (compared) {
+    if (game.owned) tags.push('<span class="game-tag tag-owned">OWNED</span>');
+    else tags.push('<span class="game-tag tag-new">NEW</span>');
+  }
+  const msrpHtml = game.msrp ? `<span class="game-msrp">$${game.msrp.toFixed(2)}</span>` : '';
   return `
-    <li class="game-item">
+    <li class="game-item${game.wishlisted && !game.owned ? ' game-wishlisted' : ''}">
       <span class="game-badge ${badgeClass}"></span>
       <a href="${steamUrl(game)}" target="_blank" class="game-name ${nameClass}">${esc(game.name)}</a>
-      ${tag}
+      ${msrpHtml}
+      ${tags.join('')}
     </li>`;
 }
 
@@ -184,13 +262,16 @@ async function compareLibrary() {
   if (!appState.hasSteamKey) { setStatus(status, 'Steam API key is not configured on the server.', 'error'); return; }
 
   btn.disabled = true;
-  setStatus(status, 'Fetching your Steam library…', 'loading');
+  setStatus(status, 'Fetching your Steam library & wishlist…', 'loading');
 
   try {
     const data = await api(`/api/steam/library?profile=${encodeURIComponent(input)}`);
     appState.library = data;
+    appState.wishlist = data.wishlist || [];
     appState.steamId = data.steamId;
-    setStatus(status, `✓ Found ${data.gameCount} games in your library`, 'success');
+    const parts = [`✓ Found ${data.gameCount} games`];
+    if (data.wishlistCount > 0) parts.push(`${data.wishlistCount} wishlisted`);
+    setStatus(status, parts.join(' · '), 'success');
     renderBundles();
   } catch (err) {
     setStatus(status, err.message, 'error');
@@ -208,9 +289,7 @@ async function addBundleUrl() {
     const data = await api('/api/bundles/add', { method: 'POST', body: { url } });
     if (data.bundle) {
       const exists = appState.bundles.find(b => b.url === data.bundle.url);
-      if (!exists) {
-        appState.bundles.unshift(data.bundle);
-      }
+      if (!exists) appState.bundles.unshift(data.bundle);
       renderBundles();
       input.value = '';
       $('#add-bundle-modal').style.display = 'none';
@@ -244,11 +323,8 @@ async function init() {
     const config = await api('/api/config');
     appState.hasSteamKey = config.hasSteamKey;
     appState.partnerId = config.partnerId;
-
-    if (!config.hasSteamKey) {
-      $('#api-warning').style.display = '';
-    }
-  } catch (_e) { /* server might not be ready yet */ }
+    if (!config.hasSteamKey) $('#api-warning').style.display = '';
+  } catch (_e) { /* server might not be ready */ }
 
   loadBundles();
 

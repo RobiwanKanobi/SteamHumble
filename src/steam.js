@@ -67,4 +67,13 @@ async function getAppDetails(appId) {
   return null;
 }
 
-module.exports = { resolveProfileUrl, getOwnedGames, searchSteamApp, getAppDetails };
+async function getWishlist(steamId) {
+  const key = getApiKey();
+  const url = `${STEAM_API_BASE}/IWishlistService/GetWishlist/v1/?steamid=${steamId}&key=${key}`;
+  const res = await fetch(url);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.response?.items || []).map(i => i.appid);
+}
+
+module.exports = { resolveProfileUrl, getOwnedGames, getWishlist, searchSteamApp, getAppDetails };
