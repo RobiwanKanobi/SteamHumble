@@ -254,6 +254,49 @@ textarea { width: 100%; resize: vertical; font-family: inherit; margin-bottom: 0
 .btn-cta:hover { background: var(--humble-red-hover); transform: translateY(-1px); }
 .cta-savings { font-size: 0.78rem; color: var(--green); font-weight: 600; }
 
+/* Wishlist callout */
+.wishlist-callout {
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--purple-bg);
+  border-left: 3px solid var(--purple);
+}
+.callout-header {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--purple);
+  margin-bottom: 0.5rem;
+}
+.callout-games {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.callout-game {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.6rem;
+  background: rgba(188, 140, 255, 0.15);
+  border: 1px solid rgba(188, 140, 255, 0.3);
+  border-radius: 6px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 0.8rem;
+  font-weight: 600;
+  transition: background 0.15s, border-color 0.15s;
+}
+.callout-game:hover {
+  background: rgba(188, 140, 255, 0.25);
+  border-color: var(--purple);
+}
+.callout-thumb {
+  width: 40px;
+  height: 15px;
+  object-fit: cover;
+  border-radius: 2px;
+}
+
 /* ========== TIERS ========== */
 
 .tier {
@@ -340,7 +383,13 @@ textarea { width: 100%; resize: vertical; font-family: inherit; margin-bottom: 0
 .tag-new { background: var(--red-bg); color: var(--red); }
 .tag-wishlist { background: var(--purple-bg); color: var(--purple); }
 
-.game-wishlisted { background: var(--purple-bg); margin: 0.1rem -0.5rem; padding: 0.3rem 0.5rem; border-radius: 4px; }
+.game-wishlisted {
+  background: var(--purple-bg);
+  margin: 0.1rem -0.5rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: 4px;
+  border-left: 3px solid var(--purple);
+}
 
 .no-compare-hint {
   font-size: 0.8rem;
@@ -376,7 +425,15 @@ textarea { width: 100%; resize: vertical; font-family: inherit; margin-bottom: 0
 }
 .game-card-owned { opacity: 0.55; }
 .game-card-owned:hover { opacity: 0.85; }
-.game-card-wishlisted { border-color: var(--purple); }
+.game-card-wishlisted {
+  border-color: var(--purple);
+  box-shadow: 0 0 8px rgba(188, 140, 255, 0.4), 0 0 20px rgba(188, 140, 255, 0.15);
+  animation: wishlist-glow 2s ease-in-out infinite;
+}
+@keyframes wishlist-glow {
+  0%, 100% { box-shadow: 0 0 8px rgba(188, 140, 255, 0.4), 0 0 20px rgba(188, 140, 255, 0.15); }
+  50% { box-shadow: 0 0 14px rgba(188, 140, 255, 0.6), 0 0 30px rgba(188, 140, 255, 0.25); }
+}
 
 .game-card-img {
   position: relative;
@@ -403,6 +460,19 @@ textarea { width: 100%; resize: vertical; font-family: inherit; margin-bottom: 0
   font-weight: 700;
   font-size: 0.85rem;
   letter-spacing: 0.1em;
+}
+.game-card-star {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  font-size: 1.3rem;
+  filter: drop-shadow(0 1px 3px rgba(0,0,0,0.7));
+  z-index: 2;
+  animation: star-pulse 1.5s ease-in-out infinite;
+}
+@keyframes star-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.2); }
 }
 .game-card-tags {
   position: absolute;

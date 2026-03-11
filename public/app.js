@@ -143,6 +143,21 @@ function renderBundles() {
         </div>`;
     }
 
+    const wishlistedGames = allGames.filter(g => g.wishlisted && !g.owned);
+    let wishlistCalloutHtml = '';
+    if (wishlistedGames.length > 0) {
+      const gameChips = wishlistedGames.map(g => {
+        const thumbSrc = g.steamAppId ? steamCapsule(g.steamAppId, 'small') : '';
+        const thumbImg = thumbSrc ? `<img src="${thumbSrc}" alt="" class="callout-thumb">` : '';
+        return `<a href="${steamUrl(g)}" target="_blank" class="callout-game">${thumbImg}<span>${esc(g.name)}</span></a>`;
+      }).join('');
+      wishlistCalloutHtml = `
+        <div class="wishlist-callout">
+          <div class="callout-header">⭐ ${wishlistedGames.length} game${wishlistedGames.length > 1 ? 's' : ''} from your wishlist!</div>
+          <div class="callout-games">${gameChips}</div>
+        </div>`;
+    }
+
     const seenInTier = new Set();
     const tiersHtml = (bundle.tiers && bundle.tiers.length > 0)
       ? [...bundle.tiers].reverse().map(tier => {
@@ -212,6 +227,7 @@ function renderBundles() {
           ${summaryHtml}
         </div>
         ${valueBarHtml}
+        ${wishlistCalloutHtml}
         ${tiersHtml}
         ${ctaHtml}
       </div>`;
@@ -252,21 +268,24 @@ function gameListHtml(game, compared) {
 function gameCardHtml(game, compared) {
   const headerSrc = game.steamAppId ? steamCapsule(game.steamAppId, 'header') : (game.icon || '');
   const owned = game.owned === true;
-  const isNew = game.owned === false;
+  const isWishlisted = game.wishlisted && !owned;
   const tags = [];
-  if (game.wishlisted && !owned) tags.push('<span class="game-tag tag-wishlist">WISHLISTED</span>');
+  if (isWishlisted) tags.push('<span class="game-tag tag-wishlist">WISHLISTED</span>');
   if (compared) tags.push(owned ? '<span class="game-tag tag-owned">OWNED</span>' : '<span class="game-tag tag-new">NEW</span>');
 
+  const starHtml = isWishlisted ? '<div class="game-card-star">⭐</div>' : '';
+
   return `
-    <a href="${steamUrl(game)}" target="_blank" class="game-card ${owned ? 'game-card-owned' : ''} ${game.wishlisted && !owned ? 'game-card-wishlisted' : ''}"
+    <a href="${steamUrl(game)}" target="_blank" class="game-card ${owned ? 'game-card-owned' : ''} ${isWishlisted ? 'game-card-wishlisted' : ''}"
        data-appid="${game.steamAppId || ''}" data-name="${esc(game.name)}" data-rating="${esc(game.rating || '')}" data-msrp="${game.msrp || ''}">
       <div class="game-card-img">
         ${headerSrc ? `<img src="${headerSrc}" alt="${esc(game.name)}" loading="lazy" onerror="this.parentElement.classList.add('img-error')">` : ''}
         ${owned ? '<div class="game-card-owned-overlay">OWNED</div>' : ''}
+        ${starHtml}
         <div class="game-card-tags">${tags.join('')}</div>
       </div>
       <div class="game-card-info">
-        <div class="game-card-name">${esc(game.name)}</div>
+        <div class="game-card-name">${isWishlisted ? '⭐ ' : ''}${esc(game.name)}</div>
         <div class="game-card-meta">
           ${game.rating ? `<span class="game-card-rating">${esc(game.rating)}</span>` : ''}
           ${game.msrp ? `<span class="game-card-price">$${game.msrp.toFixed(2)}</span>` : ''}
