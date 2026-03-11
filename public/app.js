@@ -8,6 +8,7 @@ let appState = {
   library: null,
   wishlist: null,
   steamId: null,
+  viewMode: 'list',
 };
 
 async function api(path, opts = {}) {
@@ -40,6 +41,18 @@ function extractTierPrice(tierName) {
   return m ? parseFloat(m[1]) : null;
 }
 
+function steamCapsule(appId, size) {
+  if (!appId) return '';
+  if (size === 'header') return `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg`;
+  if (size === 'capsule') return `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/capsule_231x87.jpg`;
+  return `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/capsule_sm_120.jpg`;
+}
+
+function steamUrl(game) {
+  if (game.steamAppId) return `https://store.steampowered.com/app/${game.steamAppId}`;
+  return `https://store.steampowered.com/search/?term=${encodeURIComponent(game.name)}`;
+}
+
 function classifyGame(game) {
   const ownedIds = appState.library ? new Set(appState.library.games.map(g => g.appId)) : null;
   const ownedNames = appState.library ? new Map(appState.library.games.map(g => [g.name.toLowerCase(), g])) : null;
@@ -60,12 +73,18 @@ function classifyGame(game) {
     }
   }
 
-  if (wishlistIds && game.steamAppId) {
-    wishlisted = wishlistIds.has(game.steamAppId);
-  }
+  if (wishlistIds && game.steamAppId) wishlisted = wishlistIds.has(game.steamAppId);
 
   return { ...game, owned, wishlisted };
 }
+
+function esc(str) {
+  const d = document.createElement('div');
+  d.textContent = str || '';
+  return d.innerHTML;
+}
+
+/* ---------- Bundle rendering ---------- */
 
 function renderBundles() {
   const container = $('#bundles-container');
@@ -76,7 +95,6 @@ function renderBundles() {
     noBundles.style.display = '';
     return;
   }
-
   noBundles.style.display = 'none';
   const compared = !!appState.library;
 
@@ -91,19 +109,47 @@ function renderBundles() {
     const wishlistedCount = allGames.filter(g => g.wishlisted && !g.owned).length;
     const total = allGames.length;
 
+    const heroImg = bundle.logo || bundle.image || null;
+
+    const heroHtml = heroImg
+      ? `<div class="bundle-hero"><img src="${heroImg}" alt="${esc(bundle.name)}" loading="lazy"></div>`
+      : '';
+
+    const summaryParts = [];
+    if (total > 0) summaryParts.push(`<span class="stat stat-total">${total} games</span>`);
+    if (compared) {
+      summaryParts.push(`<span class="stat stat-owned">${ownedCount} owned</span>`);
+      summaryParts.push(`<span class="stat stat-new">${newCount} new</span>`);
+      if (wishlistedCount > 0) summaryParts.push(`<span class="stat stat-wishlist">${wishlistedCount} wishlisted</span>`);
+    }
+    const summaryHtml = summaryParts.length ? `<div class="bundle-summary">${summaryParts.join('')}</div>` : '';
+
+    let valueBarHtml = '';
+    if (compared && total > 0) {
+      const pctNew = Math.round((newCount / total) * 100);
+      let verdict = '', verdictClass = '';
+      if (newCount === 0) { verdict = 'You own everything here'; verdictClass = 'verdict-skip'; }
+      else if (pctNew >= 70) { verdict = 'Great value — mostly new games!'; verdictClass = 'verdict-great'; }
+      else if (pctNew >= 40) { verdict = 'Good value — many new games'; verdictClass = 'verdict-good'; }
+      else { verdict = 'Low value — you own most of these'; verdictClass = 'verdict-low'; }
+      if (wishlistedCount > 0 && newCount > 0) {
+        verdict = `⭐ ${wishlistedCount} wishlisted! ${verdict}`;
+        verdictClass = 'verdict-great';
+      }
+      valueBarHtml = `
+        <div class="value-bar">
+          <div class="value-meter"><div class="value-meter-fill" style="width:${pctNew}%"></div></div>
+          <div class="value-verdict ${verdictClass}">${verdict}</div>
+        </div>`;
+    }
+
     const seenInTier = new Set();
     const tiersHtml = (bundle.tiers && bundle.tiers.length > 0)
       ? [...bundle.tiers].reverse().map(tier => {
           const tierPrice = extractTierPrice(tier.name);
           const tierGames = tier.games
-            .filter(g => {
-              const key = g.machineName || g.name;
-              if (seenInTier.has(key)) return false;
-              seenInTier.add(key);
-              return true;
-            })
+            .filter(g => { const k = g.machineName || g.name; if (seenInTier.has(k)) return false; seenInTier.add(k); return true; })
             .map(g => allGames.find(ag => ag.name === g.name || (ag.machineName && ag.machineName === g.machineName)) || classifyGame(g));
-
           if (tierGames.length === 0) return '';
 
           const tierNew = tierGames.filter(g => g.owned === false).length;
@@ -121,63 +167,28 @@ function renderBundles() {
             valueHtml = `<div class="tier-value"><span class="tier-value-item">Worth $${tierMsrp.toFixed(0)} · ${Math.round((1 - tierPrice / tierMsrp) * 100)}% off</span></div>`;
           }
 
+          const gamesHtml = appState.viewMode === 'grid'
+            ? `<div class="game-grid">${tierGames.map(g => gameCardHtml(g, compared)).join('')}</div>`
+            : `<ul class="game-list">${tierGames.map(g => gameListHtml(g, compared)).join('')}</ul>`;
+
           return `
             <div class="tier">
               <div class="tier-header">
                 <div class="tier-name">${esc(tier.name)}</div>
                 ${valueHtml}
               </div>
-              <ul class="game-list">
-                ${tierGames.map(g => gameItemHtml(g, compared)).join('')}
-              </ul>
+              ${gamesHtml}
             </div>`;
         }).reverse().filter(Boolean).join('')
       : (allGames.length > 0
-          ? `<div class="tier"><ul class="game-list">${allGames.map(g => gameItemHtml(g, compared)).join('')}</ul></div>`
+          ? `<div class="tier">${appState.viewMode === 'grid'
+              ? `<div class="game-grid">${allGames.map(g => gameCardHtml(g, compared)).join('')}</div>`
+              : `<ul class="game-list">${allGames.map(g => gameListHtml(g, compared)).join('')}</ul>`
+            }</div>`
           : `<div class="tier"><p class="no-compare-hint">No game data extracted. Try adding games manually.</p></div>`);
 
-    const summaryParts = [];
-    if (total > 0) summaryParts.push(`<span class="stat stat-total">${total} games</span>`);
-    if (compared) {
-      summaryParts.push(`<span class="stat stat-owned">${ownedCount} owned</span>`);
-      summaryParts.push(`<span class="stat stat-new">${newCount} new</span>`);
-      if (wishlistedCount > 0) summaryParts.push(`<span class="stat stat-wishlist">${wishlistedCount} wishlisted</span>`);
-    }
-    const summaryHtml = summaryParts.length > 0
-      ? `<div class="bundle-summary">${summaryParts.join('')}</div>`
-      : '';
-
-    const topTierPrice = bundle.tiers?.reduce((max, t) => {
-      const p = extractTierPrice(t.name);
-      return (p && p > max) ? p : max;
-    }, 0) || null;
-
+    const topTierPrice = bundle.tiers?.reduce((max, t) => { const p = extractTierPrice(t.name); return (p && p > max) ? p : max; }, 0) || null;
     const totalMsrp = allGames.reduce((s, g) => s + (g.msrp || 0), 0);
-
-    let valueBarHtml = '';
-    if (compared && total > 0) {
-      const pctNew = Math.round((newCount / total) * 100);
-      const hasWishlisted = wishlistedCount > 0;
-      let verdict = '';
-      let verdictClass = '';
-      if (newCount === 0) { verdict = 'You own everything here'; verdictClass = 'verdict-skip'; }
-      else if (pctNew >= 70) { verdict = 'Great value — mostly new games!'; verdictClass = 'verdict-great'; }
-      else if (pctNew >= 40) { verdict = 'Good value — many new games'; verdictClass = 'verdict-good'; }
-      else { verdict = 'Low value — you own most of these'; verdictClass = 'verdict-low'; }
-
-      if (hasWishlisted && newCount > 0) {
-        verdict = `⭐ ${wishlistedCount} wishlisted game${wishlistedCount > 1 ? 's' : ''}! ${verdict}`;
-        verdictClass = 'verdict-great';
-      }
-
-      valueBarHtml = `
-        <div class="value-bar">
-          <div class="value-meter">
-            <div class="value-meter-fill" style="width:${pctNew}%"></div>
-          </div>
-          <div class="value-verdict ${verdictClass}">${verdict}</div>
-        </div>`;
-    }
 
     const ctaUrl = bundleLink(bundle.url);
     const ctaHtml = (bundle.url && bundle.url !== '#')
@@ -195,6 +206,7 @@ function renderBundles() {
 
     return `
       <div class="bundle-card${wishlistedCount > 0 ? ' bundle-wishlisted' : ''}">
+        ${heroHtml}
         <div class="bundle-header">
           <h3>${esc(bundle.name)}</h3>
           ${summaryHtml}
@@ -204,37 +216,127 @@ function renderBundles() {
         ${ctaHtml}
       </div>`;
   }).join('');
+
+  setupHoverPreviews();
 }
 
-function steamUrl(game) {
-  if (game.steamAppId) return `https://store.steampowered.com/app/${game.steamAppId}`;
-  return `https://store.steampowered.com/search/?term=${encodeURIComponent(game.name)}`;
-}
+/* ---------- List view game item ---------- */
 
-function gameItemHtml(game, compared) {
+function gameListHtml(game, compared) {
   const badgeClass = !compared ? 'badge-unknown' : game.owned ? 'badge-owned' : 'badge-new';
   const nameClass = game.owned ? 'owned' : '';
   const tags = [];
   if (game.wishlisted && !game.owned) tags.push('<span class="game-tag tag-wishlist">WISHLISTED</span>');
   if (compared) {
-    if (game.owned) tags.push('<span class="game-tag tag-owned">OWNED</span>');
-    else tags.push('<span class="game-tag tag-new">NEW</span>');
+    tags.push(game.owned ? '<span class="game-tag tag-owned">OWNED</span>' : '<span class="game-tag tag-new">NEW</span>');
   }
   const msrpHtml = game.msrp ? `<span class="game-msrp">$${game.msrp.toFixed(2)}</span>` : '';
+  const thumbSrc = game.steamAppId ? steamCapsule(game.steamAppId, 'small') : (game.icon || '');
+  const thumbHtml = thumbSrc
+    ? `<img class="game-thumb" src="${thumbSrc}" alt="" loading="lazy" onerror="this.style.display='none'">`
+    : '<span class="game-thumb-placeholder"></span>';
+
   return `
-    <li class="game-item${game.wishlisted && !game.owned ? ' game-wishlisted' : ''}">
+    <li class="game-item${game.wishlisted && !game.owned ? ' game-wishlisted' : ''}"
+        data-appid="${game.steamAppId || ''}" data-name="${esc(game.name)}" data-rating="${esc(game.rating || '')}" data-msrp="${game.msrp || ''}">
       <span class="game-badge ${badgeClass}"></span>
+      ${thumbHtml}
       <a href="${steamUrl(game)}" target="_blank" class="game-name ${nameClass}">${esc(game.name)}</a>
       ${msrpHtml}
       ${tags.join('')}
     </li>`;
 }
 
-function esc(str) {
-  const d = document.createElement('div');
-  d.textContent = str || '';
-  return d.innerHTML;
+/* ---------- Grid/card view game item ---------- */
+
+function gameCardHtml(game, compared) {
+  const headerSrc = game.steamAppId ? steamCapsule(game.steamAppId, 'header') : (game.icon || '');
+  const owned = game.owned === true;
+  const isNew = game.owned === false;
+  const tags = [];
+  if (game.wishlisted && !owned) tags.push('<span class="game-tag tag-wishlist">WISHLISTED</span>');
+  if (compared) tags.push(owned ? '<span class="game-tag tag-owned">OWNED</span>' : '<span class="game-tag tag-new">NEW</span>');
+
+  return `
+    <a href="${steamUrl(game)}" target="_blank" class="game-card ${owned ? 'game-card-owned' : ''} ${game.wishlisted && !owned ? 'game-card-wishlisted' : ''}"
+       data-appid="${game.steamAppId || ''}" data-name="${esc(game.name)}" data-rating="${esc(game.rating || '')}" data-msrp="${game.msrp || ''}">
+      <div class="game-card-img">
+        ${headerSrc ? `<img src="${headerSrc}" alt="${esc(game.name)}" loading="lazy" onerror="this.parentElement.classList.add('img-error')">` : ''}
+        ${owned ? '<div class="game-card-owned-overlay">OWNED</div>' : ''}
+        <div class="game-card-tags">${tags.join('')}</div>
+      </div>
+      <div class="game-card-info">
+        <div class="game-card-name">${esc(game.name)}</div>
+        <div class="game-card-meta">
+          ${game.rating ? `<span class="game-card-rating">${esc(game.rating)}</span>` : ''}
+          ${game.msrp ? `<span class="game-card-price">$${game.msrp.toFixed(2)}</span>` : ''}
+        </div>
+      </div>
+    </a>`;
 }
+
+/* ---------- Hover preview ---------- */
+
+let previewEl = null;
+
+function setupHoverPreviews() {
+  if (!previewEl) {
+    previewEl = document.createElement('div');
+    previewEl.className = 'hover-preview';
+    previewEl.style.display = 'none';
+    document.body.appendChild(previewEl);
+  }
+
+  document.querySelectorAll('.game-item, .game-card').forEach(el => {
+    el.addEventListener('mouseenter', showPreview);
+    el.addEventListener('mouseleave', hidePreview);
+  });
+}
+
+function showPreview(e) {
+  const el = e.currentTarget;
+  const appId = el.dataset.appid;
+  const name = el.dataset.name;
+  const rating = el.dataset.rating;
+  const msrp = el.dataset.msrp;
+  if (!appId) return;
+
+  const headerSrc = steamCapsule(appId, 'header');
+  previewEl.innerHTML = `
+    <img class="preview-img" src="${headerSrc}" alt="${esc(name)}" onerror="this.style.display='none'">
+    <div class="preview-body">
+      <div class="preview-name">${esc(name)}</div>
+      ${rating ? `<div class="preview-rating">${esc(rating)}</div>` : ''}
+      ${msrp ? `<div class="preview-price">MSRP: $${parseFloat(msrp).toFixed(2)}</div>` : ''}
+      <div class="preview-link">Click to view on Steam →</div>
+    </div>`;
+  previewEl.style.display = '';
+
+  const rect = el.getBoundingClientRect();
+  const pw = 320;
+  let left = rect.right + 12;
+  if (left + pw > window.innerWidth) left = rect.left - pw - 12;
+  if (left < 4) left = 4;
+  let top = rect.top;
+  if (top + 200 > window.innerHeight) top = window.innerHeight - 210;
+  if (top < 4) top = 4;
+  previewEl.style.left = left + 'px';
+  previewEl.style.top = top + 'px';
+}
+
+function hidePreview() {
+  if (previewEl) previewEl.style.display = 'none';
+}
+
+/* ---------- View switcher ---------- */
+
+function setView(mode) {
+  appState.viewMode = mode;
+  $$('.view-btn').forEach(b => b.classList.toggle('view-btn-active', b.dataset.view === mode));
+  renderBundles();
+}
+
+/* ---------- Data loading ---------- */
 
 async function loadBundles(refresh = false) {
   const loading = $('#bundles-loading');
@@ -257,13 +359,11 @@ async function compareLibrary() {
   const input = $('#steam-input').value.trim();
   const status = $('#profile-status');
   const btn = $('#compare-btn');
-
   if (!input) { setStatus(status, 'Please enter a Steam profile.', 'error'); return; }
   if (!appState.hasSteamKey) { setStatus(status, 'Steam API key is not configured on the server.', 'error'); return; }
 
   btn.disabled = true;
   setStatus(status, 'Fetching your Steam library & wishlist…', 'loading');
-
   try {
     const data = await api(`/api/steam/library?profile=${encodeURIComponent(input)}`);
     appState.library = data;
@@ -284,39 +384,32 @@ async function addBundleUrl() {
   const input = $('#bundle-url-input');
   const url = input.value.trim();
   if (!url) return;
-
   try {
     const data = await api('/api/bundles/add', { method: 'POST', body: { url } });
     if (data.bundle) {
-      const exists = appState.bundles.find(b => b.url === data.bundle.url);
-      if (!exists) appState.bundles.unshift(data.bundle);
+      if (!appState.bundles.find(b => b.url === data.bundle.url)) appState.bundles.unshift(data.bundle);
       renderBundles();
       input.value = '';
       $('#add-bundle-modal').style.display = 'none';
     }
-  } catch (err) {
-    alert('Failed to fetch bundle: ' + err.message);
-  }
+  } catch (err) { alert('Failed to fetch bundle: ' + err.message); }
 }
 
 async function manualCompare() {
   const text = $('#manual-games').value.trim();
   if (!text) return;
-
   const names = text.split('\n').map(l => l.trim()).filter(Boolean);
   const manualBundle = {
-    name: 'Manual Game List',
-    url: '#',
+    name: 'Manual Game List', url: '#',
     tiers: [{ name: 'Games', games: names.map(n => ({ name: n, steamAppId: null })) }],
     games: names.map(n => ({ name: n, steamAppId: null })),
   };
-
-  const exists = appState.bundles.findIndex(b => b.name === 'Manual Game List');
-  if (exists >= 0) appState.bundles[exists] = manualBundle;
-  else appState.bundles.unshift(manualBundle);
-
+  const i = appState.bundles.findIndex(b => b.name === 'Manual Game List');
+  if (i >= 0) appState.bundles[i] = manualBundle; else appState.bundles.unshift(manualBundle);
   renderBundles();
 }
+
+/* ---------- Init ---------- */
 
 async function init() {
   try {
@@ -324,20 +417,22 @@ async function init() {
     appState.hasSteamKey = config.hasSteamKey;
     appState.partnerId = config.partnerId;
     if (!config.hasSteamKey) $('#api-warning').style.display = '';
-  } catch (_e) { /* server might not be ready */ }
+  } catch (_e) {}
 
   loadBundles();
 
   $('#compare-btn').addEventListener('click', compareLibrary);
-  $('#steam-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') compareLibrary(); });
+  $('#steam-input').addEventListener('keydown', e => { if (e.key === 'Enter') compareLibrary(); });
   $('#refresh-btn').addEventListener('click', () => loadBundles(true));
   $('#add-bundle-btn').addEventListener('click', () => {
-    const modal = $('#add-bundle-modal');
-    modal.style.display = modal.style.display === 'none' ? '' : 'none';
+    const m = $('#add-bundle-modal');
+    m.style.display = m.style.display === 'none' ? '' : 'none';
   });
   $('#bundle-url-submit').addEventListener('click', addBundleUrl);
-  $('#bundle-url-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') addBundleUrl(); });
+  $('#bundle-url-input').addEventListener('keydown', e => { if (e.key === 'Enter') addBundleUrl(); });
   $('#manual-compare-btn').addEventListener('click', manualCompare);
+
+  $$('.view-btn').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
 }
 
 document.addEventListener('DOMContentLoaded', init);

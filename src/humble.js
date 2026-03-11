@@ -81,6 +81,8 @@ async function fetchBundleDetails(bundleUrl) {
     name: bd.basic_data?.human_name
       || $('title').text().replace(/\s*\|?\s*Humble Bundle.*$/i, '').trim()
       || bundleUrl.split('/').pop(),
+    logo: bd.basic_data?.logo || null,
+    blurb: (bd.basic_data?.detailed_marketing_blurb || '').replace(/<[^>]+>/g, '').substring(0, 300),
     tiers: [],
     games: [],
   };
