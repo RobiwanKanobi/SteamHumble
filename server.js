@@ -111,6 +111,40 @@ app.get('/api/steam/search', async (req, res) => {
   }
 });
 
+const trailerCache = new Map();
+
+app.get('/api/steam/trailer/:appId', async (req, res) => {
+  try {
+    const appId = req.params.appId;
+    if (trailerCache.has(appId)) return res.json(trailerCache.get(appId));
+
+    const url = `https://store.steampowered.com/api/appdetails?appids=${appId}`;
+    const r = await fetch(url);
+    if (!r.ok) return res.json({ trailer: null });
+    const data = await r.json();
+    const entry = data[appId];
+    if (!entry?.success || !entry.data?.movies?.length) {
+      const result = { trailer: null };
+      trailerCache.set(appId, result);
+      return res.json(result);
+    }
+    const movie = entry.data.movies[0];
+    const result = {
+      trailer: {
+        name: movie.name,
+        thumbnail: movie.thumbnail,
+        hls: movie.hls_h264 || null,
+        dash: movie.dash_h264 || null,
+      },
+    };
+    trailerCache.set(appId, result);
+    res.json(result);
+  } catch (err) {
+    console.error('Trailer fetch error:', err);
+    res.json({ trailer: null });
+  }
+});
+
 app.post('/api/compare', async (req, res) => {
   try {
     const { profile, bundleGames } = req.body;

@@ -168,17 +168,11 @@ textarea { width: 100%; resize: vertical; font-family: inherit; margin-bottom: 0
 /* Hero banner */
 .bundle-hero {
   width: 100%;
-  max-height: 160px;
-  overflow: hidden;
   background: var(--bg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 .bundle-hero img {
   width: 100%;
   height: auto;
-  object-fit: cover;
   display: block;
 }
 
@@ -449,20 +443,43 @@ textarea { width: 100%; resize: vertical; font-family: inherit; margin-bottom: 0
 .hover-preview {
   position: fixed;
   z-index: 1000;
-  width: 300px;
+  width: 340px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
   box-shadow: 0 8px 24px rgba(0,0,0,0.5);
   pointer-events: none;
-  transition: opacity 0.15s;
+}
+.preview-media {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: var(--bg);
+  overflow: hidden;
 }
 .preview-img {
   width: 100%;
-  height: auto;
+  height: 100%;
+  object-fit: cover;
   display: block;
-  background: var(--bg);
+}
+.preview-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.preview-loading {
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+}
+.preview-loading .spinner {
+  width: 14px;
+  height: 14px;
+  border-width: 2px;
 }
 .preview-body {
   padding: 0.6rem 0.75rem;

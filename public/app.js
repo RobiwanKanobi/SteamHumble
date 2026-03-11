@@ -275,9 +275,12 @@ function gameCardHtml(game, compared) {
     </a>`;
 }
 
-/* ---------- Hover preview ---------- */
+/* ---------- Hover preview with trailer ---------- */
 
 let previewEl = null;
+let previewHls = null;
+let previewTimer = null;
+const trailerCache = new Map();
 
 function setupHoverPreviews() {
   if (!previewEl) {
@@ -293,7 +296,23 @@ function setupHoverPreviews() {
   });
 }
 
+function positionPreview(anchorEl) {
+  const rect = anchorEl.getBoundingClientRect();
+  const pw = 340;
+  let left = rect.right + 12;
+  if (left + pw > window.innerWidth) left = rect.left - pw - 12;
+  if (left < 4) left = 4;
+  let top = rect.top;
+  if (top + 280 > window.innerHeight) top = window.innerHeight - 290;
+  if (top < 4) top = 4;
+  previewEl.style.left = left + 'px';
+  previewEl.style.top = top + 'px';
+}
+
 function showPreview(e) {
+  clearTimeout(previewTimer);
+  destroyPreviewHls();
+
   const el = e.currentTarget;
   const appId = el.dataset.appid;
   const name = el.dataset.name;
@@ -303,7 +322,11 @@ function showPreview(e) {
 
   const headerSrc = steamCapsule(appId, 'header');
   previewEl.innerHTML = `
-    <img class="preview-img" src="${headerSrc}" alt="${esc(name)}" onerror="this.style.display='none'">
+    <div class="preview-media">
+      <img class="preview-img" src="${headerSrc}" alt="${esc(name)}" onerror="this.style.display='none'">
+      <video class="preview-video" muted playsinline style="display:none"></video>
+      <div class="preview-loading" style="display:none"><div class="spinner"></div></div>
+    </div>
     <div class="preview-body">
       <div class="preview-name">${esc(name)}</div>
       ${rating ? `<div class="preview-rating">${esc(rating)}</div>` : ''}
@@ -311,20 +334,69 @@ function showPreview(e) {
       <div class="preview-link">Click to view on Steam →</div>
     </div>`;
   previewEl.style.display = '';
+  positionPreview(el);
 
-  const rect = el.getBoundingClientRect();
-  const pw = 320;
-  let left = rect.right + 12;
-  if (left + pw > window.innerWidth) left = rect.left - pw - 12;
-  if (left < 4) left = 4;
-  let top = rect.top;
-  if (top + 200 > window.innerHeight) top = window.innerHeight - 210;
-  if (top < 4) top = 4;
-  previewEl.style.left = left + 'px';
-  previewEl.style.top = top + 'px';
+  previewTimer = setTimeout(() => loadTrailer(appId), 400);
+}
+
+async function loadTrailer(appId) {
+  if (previewEl.style.display === 'none') return;
+
+  const video = previewEl.querySelector('.preview-video');
+  const img = previewEl.querySelector('.preview-img');
+  const loading = previewEl.querySelector('.preview-loading');
+  if (!video) return;
+
+  let data = trailerCache.get(appId);
+  if (!data) {
+    loading.style.display = '';
+    try {
+      data = await api(`/api/steam/trailer/${appId}`);
+      trailerCache.set(appId, data);
+    } catch (_e) {
+      loading.style.display = 'none';
+      return;
+    }
+  }
+
+  if (previewEl.style.display === 'none') return;
+  loading.style.display = 'none';
+
+  if (!data.trailer?.hls) return;
+
+  if (typeof Hls !== 'undefined' && Hls.isSupported()) {
+    previewHls = new Hls({ maxBufferLength: 5, maxMaxBufferLength: 10 });
+    previewHls.loadSource(data.trailer.hls);
+    previewHls.attachMedia(video);
+    previewHls.on(Hls.Events.MANIFEST_PARSED, () => {
+      video.style.display = '';
+      img.style.display = 'none';
+      video.play().catch(() => {});
+    });
+    previewHls.on(Hls.Events.ERROR, () => {
+      video.style.display = 'none';
+      img.style.display = '';
+    });
+  } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    video.src = data.trailer.hls;
+    video.addEventListener('loadedmetadata', () => {
+      video.style.display = '';
+      img.style.display = 'none';
+      video.play().catch(() => {});
+    }, { once: true });
+  }
+}
+
+function destroyPreviewHls() {
+  if (previewHls) {
+    previewHls.destroy();
+    previewHls = null;
+  }
 }
 
 function hidePreview() {
+  clearTimeout(previewTimer);
+  destroyPreviewHls();
   if (previewEl) previewEl.style.display = 'none';
 }
 
