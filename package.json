@@ -4,7 +4,7 @@
   "description": "Compare Steam games in Humble Bundles with your Steam library",
   "main": "server.js",
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "scripts": {
     "start": "node server.js",
