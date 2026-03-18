@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bundle Checker — Steam × Humble Bundle</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <h1>🎮 Bundle Checker</h1>
+    <p class="tagline">See which Humble Bundle games you already own on Steam</p>
+  </header>
+
+  <main>
+    <!-- Status banner for missing API key -->
+    <div id="api-warning" class="banner banner-warning" style="display:none">
+      <strong>Steam API key not configured.</strong>
+      Set <code>STEAM_API_KEY</code> in your <code>.env</code> file.
+      <a href="https://steamcommunity.com/dev/apikey" target="_blank">Get a key →</a>
+    </div>
+
+    <!-- Steam Profile Input -->
+    <section class="card" id="profile-section">
+      <h2>Your Steam Profile</h2>
+      <div class="input-row">
+        <input
+          type="text"
+          id="steam-input"
+          placeholder="Paste your Steam profile URL here"
+          autocomplete="off"
+        >
+        <button id="compare-btn" class="btn-primary">Compare</button>
+      </div>
+      <div id="input-detect" class="input-detect" style="display:none"></div>
+      <div class="profile-actions">
+        <button id="demo-btn" class="btn-link" type="button">Try with a demo profile</button>
+        <span class="dot-sep">·</span>
+        <button id="help-toggle" class="btn-link" type="button">How do I find my Steam ID?</button>
+      </div>
+      <div id="profile-status" class="status"></div>
+
+      <!-- Connected profile card -->
+      <div id="profile-card" class="profile-card" style="display:none">
+        <img id="profile-avatar" class="profile-avatar" src="" alt="">
+        <div class="profile-info">
+          <div id="profile-name" class="profile-name"></div>
+          <div id="profile-stats" class="profile-stats"></div>
+        </div>
+        <button id="profile-disconnect" class="btn-link" type="button">Change</button>
+      </div>
+
+      <!-- Privacy fix guide -->
+      <div id="privacy-guide" class="privacy-guide" style="display:none"></div>
+
+      <!-- How to find Steam ID guide -->
+      <div id="help-guide" class="help-guide" style="display:none">
+        <h4>3 ways to find your Steam profile</h4>
+        <div class="help-method">
+          <div class="help-step-num">1</div>
+          <div>
+            <strong>Copy your profile URL</strong> (easiest)<br>
+            Open Steam → click your name (top right) → <em>View my profile</em> → copy the URL from your browser's address bar.
+            It will look like <code>https://steamcommunity.com/id/yourname</code> or <code>https://steamcommunity.com/profiles/7656…</code>
+          </div>
+        </div>
+        <div class="help-method">
+          <div class="help-step-num">2</div>
+          <div>
+            <strong>Use the Steam app</strong><br>
+            Open Steam → click your name → <em>Account details</em> → your SteamID64 is the long number in the URL.
+          </div>
+        </div>
+        <div class="help-method">
+          <div class="help-step-num">3</div>
+          <div>
+            <strong>Use steamid.io</strong><br>
+            Go to <a href="https://steamid.io" target="_blank">steamid.io</a>, search your Steam name, and copy the <em>steamID64</em> number.
+          </div>
+        </div>
+        <div class="help-note">
+          <strong>⚠️ Important:</strong> Your Steam display name (what friends see) is <em>not</em> the same as your profile URL.
+          Don't type your display name — paste the full URL or ID number.
+        </div>
+      </div>
+    </section>
+
+    <!-- Humble Choice Section -->
+    <section id="choice-section" style="display:none">
+      <div id="choice-container"></div>
+    </section>
+
+    <!-- Bundles Section -->
+    <section id="bundles-section">
+      <div class="section-header">
+        <h2>Current Humble Bundles</h2>
+        <div class="header-actions">
+          <div class="view-toggle">
+            <button class="view-btn view-btn-active" data-view="list" title="List view">☰ List</button>
+            <button class="view-btn" data-view="grid" title="Grid view">⊞ Grid</button>
+          </div>
+          <button id="refresh-btn" class="btn-secondary" title="Refresh bundles">↻ Refresh</button>
+          <button id="add-bundle-btn" class="btn-secondary" title="Add bundle URL">+ Add Bundle</button>
+        </div>
+      </div>
+
+      <!-- Add bundle modal -->
+      <div id="add-bundle-modal" class="card" style="display:none">
+        <div class="input-row">
+          <input type="text" id="bundle-url-input" placeholder="Paste Humble Bundle URL, e.g. https://www.humblebundle.com/games/...">
+          <button id="bundle-url-submit" class="btn-primary">Fetch</button>
+        </div>
+      </div>
+
+      <!-- Manual game entry -->
+      <div class="card" id="manual-section">
+        <h3>Or add games manually</h3>
+        <p class="hint">Paste game names (one per line) to compare against your library.</p>
+        <textarea id="manual-games" rows="4" placeholder="Game Name 1&#10;Game Name 2&#10;Game Name 3"></textarea>
+        <button id="manual-compare-btn" class="btn-secondary">Compare These Games</button>
+      </div>
+
+      <div id="bundles-loading" class="loading" style="display:none">
+        <div class="spinner"></div>
+        <span>Fetching bundles from Humble Bundle…</span>
+      </div>
+
+      <div id="bundles-container"></div>
+
+      <div id="no-bundles" class="empty-state" style="display:none">
+        <p>No game bundles found automatically.</p>
+        <p>Try adding a bundle URL above, or paste game names manually.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>Bundle Checker MVP — Not affiliated with Valve or Humble Bundle</p>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
