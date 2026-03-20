@@ -18,6 +18,7 @@ app.get('/api/config', (_req, res) => {
   res.json({
     hasSteamKey: !!process.env.STEAM_API_KEY,
     partnerId: process.env.HUMBLE_PARTNER_ID || '',
+    trackingUrl: process.env.HUMBLE_TRACKING_URL || '',
   });
 });
 

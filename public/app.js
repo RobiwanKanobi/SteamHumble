@@ -29,6 +29,9 @@ function setStatus(el, msg, type = '') {
 
 function bundleLink(url) {
   if (!url || url === '#') return '#';
+  if (appState.trackingUrl) {
+    return `${appState.trackingUrl}?u=${encodeURIComponent(url)}`;
+  }
   if (appState.partnerId) {
     const sep = url.includes('?') ? '&' : '?';
     return `${url}${sep}partner=${appState.partnerId}`;
@@ -729,6 +732,7 @@ async function init() {
     const config = await api('/api/config');
     appState.hasSteamKey = config.hasSteamKey;
     appState.partnerId = config.partnerId;
+    appState.trackingUrl = config.trackingUrl;
     if (!config.hasSteamKey) $('#api-warning').style.display = '';
   } catch (_e) {}
 
