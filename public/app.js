@@ -30,7 +30,8 @@ function setStatus(el, msg, type = '') {
 function bundleLink(url) {
   if (!url || url === '#') return '#';
   if (appState.trackingUrl) {
-    return `${appState.trackingUrl}?u=${encodeURIComponent(url)}`;
+    const sep = appState.trackingUrl.includes('?') ? '&' : '?';
+    return `${appState.trackingUrl}${sep}u=${encodeURIComponent(url)}`;
   }
   if (appState.partnerId) {
     const sep = url.includes('?') ? '&' : '?';
